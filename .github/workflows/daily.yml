@@ -1,0 +1,65 @@
+name: daily-tests
+
+on:
+  schedule:
+    - cron: "0 12 * * *"   # ساعت UTC. 12:00 UTC = 16:00 به وقت باکو
+  workflow_dispatch:        # اجرای دستی با فرم
+    inputs:
+      subject:
+        description: "درس (مثلاً ریاضی)"
+        required: false
+      grade:
+        description: "پایه (مثلاً پایه نهم)"
+        required: false
+      topic:
+        description: "مبحث یا فصل (خالی = کل کتاب)"
+        required: false
+      level:
+        description: "سطح"
+        type: choice
+        default: "نمونه"
+        options: ["کتاب", "نمونه", "تیزهوشان"]
+      count:
+        description: "تعداد سوال"
+        default: "10"
+      mode:
+        description: "ai = سوال تازه با هوش مصنوعی | bank = از questions.txt"
+        type: choice
+        default: "ai"
+        options: ["ai", "bank"]
+
+permissions:
+  contents: write
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install fonts and PDF libs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 fonts-noto-core fonts-dejavu-core
+      - run: pip install -r requirements.txt
+      - name: Run bot
+        env:
+          SUBJECT: ${{ inputs.subject || vars.SUBJECT }}
+          GRADE: ${{ inputs.grade || vars.GRADE }}
+          TOPICS: ${{ inputs.topic || vars.TOPICS }}
+          LEVEL: ${{ inputs.level || vars.LEVEL }}
+          COUNT: ${{ inputs.count || '10' }}
+          MODE: ${{ inputs.mode || vars.MODE }}
+          AVALAI_API_KEY: ${{ secrets.AVALAI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
+      - name: Save history
+        run: |
+          git config user.name "bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add history.json generated_questions.txt
+          git commit -m "update history" || echo "no changes"
+          git push
